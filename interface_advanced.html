@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dashboard Multiativos — Trading Bot</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet"/>
+  <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    :root {
+      --bg:#0e1116; --panel:#121621; --muted:#9aa4bf; --text:#e6e9f0; --accent:#5b8def;
+      --buy:#00c389; --sell:#ff5c7a; --warn:#f0b90b; --ok:#13d38e; --bad:#ff5c7a; --stroke:#1c2233;
+      --chip:#182035;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial;
+      background: var(--bg);
+      color: var(--text);
+    }
+    /* Header */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      background: #0b0f16;
+      border-bottom: 1px solid var(--stroke);
+    }
+    .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .brand .title {
+      font-weight: 700;
+    }
+    .brand .subtitle {
+      font-weight: 400;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .kpis {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .kpi {
+      background: #0f1422;
+      border: 1px solid var(--stroke);
+      border-radius: 10px;
+      padding: 8px 10px;
+      min-width: 130px;
+    }
+    .kpi .label {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .kpi .val {
+      font-size: 16px;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+    .btn {
+      background: #1d2743;
+      color: #cdd6f4;
+      border: 1px solid #2a3658;
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn:hover {
+      background: #243257;
+    }
+    .btn.ok {
+      background: rgba(19,211,142,.12);
+      border-color: rgba(19,211,142,.4);
+      color: #6ef2c8;
+    }
+    .btn.accent {
+      background: rgba(91,141,239,.12);
+      border-color: rgba(91,141,239,.45);
+      color: #9ab8ff;
+    }
+    main {
+      padding: 16px;
+    }
+    /* Grid de cards (3 por linha) */
+    .grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(3, minmax(280px, 1fr));
+    }
+    @media (max-width:1350px) {
+      .grid {
+        grid-template-columns: repeat(2, minmax(280px, 1fr));
+      }
+    }
+    @media (max-width:900px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    /* Card */
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--stroke);
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow: 0 10px 20px rgba(0,0,0,.25);
+      transition: transform .12s ease, box-shadow .12s ease;
+      cursor: pointer;
+      min-height: 360px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 16px 28px rgba(0,0,0,.35);
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .card-title {
+      display: flex;
+      flex-direction: column;
+    }
+    .card-title .name {
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .card-title .ticker {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .signal-badge {
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--stroke);
+    }
+    .signal-buy {
+      background: rgba(0,195,137,.12);
+      border-color: rgba(0,195,137,.4);
+      color: #7cf1d6;
+    }
+    .signal-sell {
+      background: rgba(255,92,122,.12);
+      border-color: rgba(255,92,122,.4);
+      color: #ffb7c3;
+    }
+    .signal-hold {
+      background: rgba(240,185,11,.12);
+      border-color: rgba(240,185,11,.4);
+      color: #f8d765;
+    }
+    .mini-stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+    .stat {
+      background: #0f1422;
+      border: 1px solid var(--stroke);
+      border-radius: 10px;
+      padding: 8px;
+    }
+    .stat .label {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .stat .val {
+      font-size: 16px;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+    .chart-mini {
+      height: 180px;
+      border: 1px solid var(--stroke);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    /* Permite clique no card mesmo sobre o gráfico */
+    .chart-mini, .chart-mini *, .chart-mini canvas {
+      pointer-events: none;
+    }
+    .gain {
+      color: #00c389;
+    }
+    .loss {
+      color: #ff5c7a;
+    }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+    .muted {
+      color: var(--muted);
+    }
+    /* Modal */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.55);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      backdrop-filter: blur(2px);
+    }
+    .modal {
+      width: min(1100px, 94vw);
+      max-height: 88vh;
+      overflow: auto;
+      background: #0f1422;
+      border: 1px solid var(--stroke);
+      border-radius: 14px;
+      box-shadow: 0 24px 60px rgba(0,0,0,.5);
+      padding: 16px;
+    }
+    .modal header {
+      position: sticky;
+      top: 0;
+      background: #0f1422;
+      border: none;
+      padding: 10px 0;
+      margin-bottom: 6px;
+    }
+    .modal .title {
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .modal .close {
+      background: #182035;
+      border: 1px solid #2a3658;
+      color: #cdd6f4;
+      border-radius: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+    }
+    .modal .close:hover {
+      background: #213055;
+    }
+    .modal-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width:980px) {
+      .modal-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .panel {
+      background: #121621;
+      border: 1px solid var(--stroke);
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .panel h3 {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .4px;
+    }
+    .list {
+      font-size: 13px;
+      color: #c9d4f4;
+      line-height: 1.4;
+    }
+    .list div {
+      margin-bottom: 6px;
+    }
+    .bar {
+      width: 100%;
+      height: 10px;
+      border: 1px solid var(--stroke);
+      border-radius: 8px;
+      background: #0f1422;
+      overflow: hidden;
+    }
+    .bar-fill-long {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, rgba(0,195,137,.2), #00c389);
+      transition: width .4s ease;
+    }
+    .bar-fill-short {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, rgba(255,92,122,.2), #ff5c7a);
+      transition: width .4s ease;
+    }
+    .row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    select, input {
+      background: #0f1422;
+      color: #dbe4ff;
+      border: 1px solid var(--stroke);
+      border-radius: 8px;
+      padding: 6px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="title">Trading Bot Dashboard</div>
+      <div class="subtitle">Atualiza a cada 1 minuto • Dados: Binance</div>
+    </div>
+    <div class="kpis">
+      <div class="kpi">
+        <div class="label">Total Capital</div>
+        <div class="val" id="kpiTotalCapital">$0.00</div>
+      </div>
+      <div class="kpi">
+        <div class="label">PnL Total</div>
+        <div class="val" id="kpiTotalPnl">$0.00</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Win Rate (média)</div>
+        <div class="val" id="kpiWinRate">0%</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Melhor Trade</div>
+        <div class="val" id="kpiBest">$0.00</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Pior Trade</div>
+        <div class="val" id="kpiWorst">$0.00</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Próximo BUY</div>
+        <div class="val" id="kpiNearBuy">—</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Próximo SELL</div>
+        <div class="val" id="kpiNearSell">—</div>
+      </div>
+      <button class="btn ok" id="btnStartAll">Iniciar Todos</button>
+      <button class="btn accent" id="btnTrainAll">Treinar Todos (ML)</button>
+
+      <button class="btn" id="btnRefresh" title="🔔">⟳</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="grid" class="grid"></div>
+  </main>
+
+  <!-- Modal -->
+  <div id="modalBackdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal">
+      <header>
+        <div class="row" style="justify-content:space-between;">
+          <div class="title" id="modalTitle">Detalhes</div>
+          <button class="close" id="modalClose">Fechar</button>
+        </div>
+      </header>
+      <section class="modal-grid" id="modalContent">
+        <!-- preenchido por JS -->
+      </section>
+    </div>
+  </div>
+
+  <!-- Container de notificações (toasts) -->
+  <div id="toastContainer" aria-live="polite" aria-atomic="true" style="position:fixed; right:16px; bottom:16px; display:flex; flex-direction:column; gap:8px; z-index:2000;"></div>
+
+  <script>
+    const REFRESH_MS = 60000; // 60s
+    const cardDataCache = {}; // última resposta por símbolo para modal
+
+    // Mapa para evitar notificações duplicadas: guarda o último evento (timestamp) processado por símbolo
+    const tradeEventInit = {};       // se já inicializou o símbolo (para não notificar histórico)
+    const tradeEventLastTime = {};   // último epoch time de trade_point notificado por símbolo
+
+    // Utils
+    function fmtMoney(v) {
+      const n = Number(v || 0);
+      const s = n < 0 ? '-' : '';
+      return s + '$' + Math.abs(n).toFixed(2);
+    }
+    function colorizePnL(v) {
+      const n = Number(v || 0);
+      return `<span class="${n >= 0 ? 'gain' : 'loss'}">${fmtMoney(n)}</span>`;
+    }
+    function toEpochSec(ts) {
+      return Math.floor(new Date(ts).getTime() / 1000);
+    }
+    async function fetchJSON(url, opts = {}) {
+      try {
+        const r = await fetch(url, opts);
+        if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+        const ct = (r.headers.get('content-type') || '').toLowerCase();
+        return ct.includes('application/json') ? r.json() : null;
+      } catch (e) {
+        console.error('ERR fetch', url, e);
+        return null;
+      }
+    }
+
+    // Função de toast simples (não altera layout existente)
+    function showToast(message, kind) {
+      const wrap = document.getElementById('toastContainer');
+      const el = document.createElement('div');
+      const border = kind === 'BUY' ? 'var(--buy)' : (kind === 'SELL' ? 'var(--sell)' : 'var(--warn)');
+      el.style.cssText = `
+        background:#0f1422; color:var(--text);
+        border:1px solid var(--stroke); border-left:4px solid ${border};
+        border-radius:10px; padding:10px 12px;
+        box-shadow:0 10px 20px rgba(0,0,0,.35);
+        font-size:14px; font-weight:600; max-width: 360px;
+        opacity:1; transform: translateY(0); transition: opacity .3s ease, transform .3s ease;
+      `;
+      el.textContent = message;
+      wrap.appendChild(el);
+      // Auto-hide
+      setTimeout(() => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(8px)';
+      }, 5200);
+      setTimeout(() => {
+        if (wrap.contains(el)) wrap.removeChild(el);
+      }, 5600);
+    }
+
+    // Converte tipo para rótulo legível
+    function typeLabel(t) {
+      if (t === 'BUY') return 'Compra aberta';
+      if (t === 'SELL') return 'Venda aberta';
+      if (t === 'BUY_EXIT') return 'Compra fechada';
+      if (t === 'SELL_EXIT') return 'Venda fechada';
+      return 'Ação';
+    }
+
+    // Notifica operação
+    function notifyTrade(sym, ev) {
+      const label = typeLabel(ev.type);
+      const price = ev.price != null ? ` @ $${Number(ev.price).toFixed(2)}` : '';
+      showToast(`${sym}: ${label}${price}`, ev.type);
+    }
+
+    // Header actions
+    async function startAll() {
+      const j = await fetchJSON('/api/bot/ALL/start', { method: 'POST' });
+      console.log('Start ALL', j);
+    }
+    async function trainAll() {
+      const j = await fetchJSON('/api/bot/ALL/train_ml', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period: '7d', interval: '1m' })
+      });
+      console.log('Train ALL', j);
+    }
+    document.getElementById('btnStartAll').addEventListener('click', startAll);
+    document.getElementById('btnTrainAll').addEventListener('click', trainAll);
+
+    // Render mini chart inside a card, with trade markers + DETECÇÃO DE EVENTOS p/ notificação
+    async function renderMiniChart(sym) {
+      const el = document.getElementById('chart-' + sym);
+      if (!el) return;
+      const data = await fetchJSON(`/api/bot/${sym}/chart`);
+      if (!data || !data.candlesticks) {
+        el.innerHTML = '';
+        return;
+      }
+      el.innerHTML = ''; // reset para evitar múltiplos canvases
+      const chart = LightweightCharts.createChart(el, {
+        layout: { background: { type: 'solid', color: '#0f1422' }, textColor: '#cfd8f6' },
+        grid: { vertLines: { color: '#1b2235' }, horzLines: { color: '#1b2235' } },
+        crosshair: { mode: 0 }, rightPriceScale: { borderColor: '#1b2235' },
+        timeScale: { borderColor: '#1b2235', timeVisible: true, secondsVisible: false }
+      });
+      const series = chart.addCandlestickSeries({
+        upColor: '#00c389', borderUpColor: '#00c389', wickUpColor: '#00c389',
+        downColor: '#ff5c7a', borderDownColor: '#ff5c7a', wickDownColor: '#ff5c7a'
+      });
+      let candles = data.candlesticks.map(c => ({
+        time: toEpochSec(c.timestamp),
+        open: +c.open, high: +c.high, low: +c.low, close: +c.close
+      }));
+      // exibir somente os últimos 180 pontos pra ficar leve
+      if (candles.length > 180) candles = candles.slice(-180);
+      series.setData(candles);
+
+      // Markers de trades (BUY/SELL/EXIT)
+      const startTime = candles.length ? candles[0].time : 0;
+      const tradePoints = (data.trade_points || []);
+      const markers = tradePoints
+        .map(tp => {
+          const t = toEpochSec(tp.timestamp);
+          let shape = 'circle', position = 'aboveBar', color = '#f0b90b', text = 'EXIT';
+          if (tp.type === 'BUY') { shape = 'arrowUp'; position = 'belowBar'; color = '#00c389'; text = 'BUY'; }
+          else if (tp.type === 'SELL') { shape = 'arrowDown'; position = 'aboveBar'; color = '#ff5c7a'; text = 'SELL'; }
+          else if (tp.type === 'BUY_EXIT') { shape = 'circle'; position = 'aboveBar'; color = '#f0b90b'; text = 'EXIT'; }
+          else if (tp.type === 'SELL_EXIT') { shape = 'circle'; position = 'belowBar'; color = '#f0b90b'; text = 'EXIT'; }
+          return { time: t, position, shape, color, text };
+        })
+        .filter(m => m.time >= startTime);
+
+      if (markers.length) {
+        series.setMarkers(markers);
+      }
+
+      // ====== DETECÇÃO DE NOVOS EVENTOS PARA NOTIFICAÇÃO ======
+      // Lista de eventos crua com time e price para notificação
+      const events = tradePoints.map(tp => ({
+        time: toEpochSec(tp.timestamp),
+        type: tp.type,
+        price: tp.price
+      })).sort((a, b) => a.time - b.time);
+
+      if (!tradeEventInit[sym]) {
+        // primeira vez: evitar notificar eventos históricos
+        tradeEventInit[sym] = true;
+        tradeEventLastTime[sym] = events.length ? events[events.length - 1].time : 0;
+      } else {
+        const lastT = tradeEventLastTime[sym] || 0;
+        const fresh = events.filter(e => e.time > lastT);
+        if (fresh.length) {
+          fresh.forEach(e => notifyTrade(sym, e));
+          tradeEventLastTime[sym] = Math.max(...fresh.map(e => e.time));
+        }
+      }
+      // ====== FIM DETECÇÃO ======
+    }
+
+    // Render dashboard
+    async function render() {
+      const all = await fetchJSON('/api/bot/ALL/status');
+      if (!all) return;
+
+      // KPIs agregados
+      let totalCapital = 0, totalPnl = 0;
+      let sumWR = 0, countWR = 0;
+      let best = null, worst = null;
+
+      const entries = Object.entries(all);
+      for (const [sym, st] of entries) {
+        totalCapital += Number(st.current_capital || 0);
+        totalPnl += Number(st.total_pnl || 0);
+        const perf = st.performance || {};
+        if (typeof perf.win_rate === 'number') { sumWR += perf.win_rate; countWR++; }
+        if (typeof perf.best_trade === 'number') {
+          best = (best == null) ? perf.best_trade : Math.max(best, perf.best_trade);
+        }
+        if (typeof perf.worst_trade === 'number') {
+          worst = (worst == null) ? perf.worst_trade : Math.min(worst, perf.worst_trade);
+        }
+      }
+      document.getElementById('kpiTotalCapital').textContent = fmtMoney(totalCapital);
+      document.getElementById('kpiTotalPnl').innerHTML = colorizePnL(totalPnl);
+      document.getElementById('kpiWinRate').textContent = (countWR ? (sumWR / countWR) : 0).toFixed(1) + '%';
+      document.getElementById('kpiBest').innerHTML = colorizePnL(best || 0);
+      document.getElementById('kpiWorst').innerHTML = colorizePnL(worst || 0);
+
+      // Encontrar quem está mais perto do BUY/SELL
+      let nearBuy = null, nearSell = null;
+      let nearBuyAbove = null, nearSellAbove = null;
+
+      for (const [sym, st] of entries) {
+        const det = st.signal?.details || {};
+        const params = st.params || {};
+        const weights = params.weights || { ml: 0.4, rule: 0.3, mtf: 0.3 };
+        const th = params.thresholds || { buy: 60, sell: 60 };
+
+        const rb_l = Number(det.rb_long || 0);
+        const rb_s = Number(det.rb_short || 0);
+        const tf_l = Number(det.tf_long || 0);
+        const tf_s = Number(det.tf_short || 0);
+        const mlp = Number(det.ml_p_up || 0.5);
+        const filterMult = Number(det.filter_mult ?? 1.0);
+        const wmlEff = Number(det.ml_weight_effective ?? weights.ml ?? 0);
+
+        const longScore = 100 * ((Number(weights.rule || 0) * rb_l) + (Number(weights.mtf || 0) * tf_l) + (wmlEff * mlp)) * filterMult;
+        const shortScore = 100 * ((Number(weights.rule || 0) * rb_s) + (Number(weights.mtf || 0) * tf_s) + (wmlEff * (1 - mlp))) * filterMult;
+
+        const thBuy = Number(th.buy ?? 60);
+        const thSell = Number(th.sell ?? 60);
+        const buyDiff = thBuy - longScore;
+        const sellDiff = thSell - shortScore;
+
+        if (buyDiff >= 0) {
+          if (!nearBuy || buyDiff < nearBuy.diff) nearBuy = { sym, score: longScore, diff: buyDiff, th: thBuy };
+        } else {
+          const d = Math.abs(buyDiff);
+          if (!nearBuyAbove || d < nearBuyAbove.diff) nearBuyAbove = { sym, score: longScore, diff: d, th: thBuy };
+        }
+
+        if (sellDiff >= 0) {
+          if (!nearSell || sellDiff < nearSell.diff) nearSell = { sym, score: shortScore, diff: sellDiff, th: thSell };
+        } else {
+          const d = Math.abs(sellDiff);
+          if (!nearSellAbove || d < nearSellAbove.diff) nearSellAbove = { sym, score: shortScore, diff: d, th: thSell };
+        }
+      }
+
+      const elNearBuy = document.getElementById('kpiNearBuy');
+      const elNearSell = document.getElementById('kpiNearSell');
+      if (nearBuy) elNearBuy.textContent = `${nearBuy.sym} (${nearBuy.score.toFixed(1)})`;
+      else if (nearBuyAbove) elNearBuy.textContent = `${nearBuyAbove.sym} (${nearBuyAbove.score.toFixed(1)} ≥ ${nearBuyAbove.th})`;
+      else elNearBuy.textContent = '—';
+      if (nearSell) elNearSell.textContent = `${nearSell.sym} (${nearSell.score.toFixed(1)})`;
+      else if (nearSellAbove) elNearSell.textContent = `${nearSellAbove.sym} (${nearSellAbove.score.toFixed(1)} ≥ ${nearSellAbove.th})`;
+      else elNearSell.textContent = '—';
+
+      // GRID
+      const grid = document.getElementById('grid');
+      grid.innerHTML = '';
+
+      for (const [sym, st] of entries) {
+        const sig = st.signal || {};
+        const signal = (sig.signal || 'HOLD').toUpperCase();
+        const strength = (sig.strength != null) ? ` (${Math.round(sig.strength)})` : '';
+        const badgeClass = signal === 'BUY' ? 'signal-buy' : (signal === 'SELL' ? 'signal-sell' : 'signal-hold');
+        const price = Number(st.current_data?.price || 0);
+        const capital = Number(st.current_capital || 0);
+        const pnl = Number(st.total_pnl || 0);
+        const winRate = Number(st.performance?.win_rate || 0);
+        const name = st.market || st.ticker || sym;
+
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.setAttribute('data-sym', sym);
+        card.innerHTML = `
+          <div class="card-header">
+            <div class="card-title">
+              <div class="name">${sym}</div>
+              <div class="ticker">${name}</div>
+            </div>
+            <div class="signal-badge ${badgeClass}">${signal}${strength}</div>
+          </div>
+          <div class="chart-mini" id="chart-${sym}"></div>
+          <div class="mini-stats">
+            <div class="stat">
+              <div class="label">Preço</div>
+              <div class="val mono">$${price.toFixed(2)}</div>
+            </div>
+            <div class="stat">
+              <div class="label">Capital</div>
+              <div class="val mono">$${capital.toFixed(2)}</div>
+            </div>
+            <div class="stat">
+              <div class="label">PnL</div>
+              <div class="val mono">${pnl >= 0 ? `<span class="gain">$${pnl.toFixed(2)}</span>` : `<span class="loss">$${pnl.toFixed(2)}</span>`}</div>
+            </div>
+            <div class="stat">
+              <div class="label">Win Rate</div>
+              <div class="val mono">${winRate.toFixed(1)}%</div>
+            </div>
+          </div>
+        `;
+        grid.appendChild(card);
+        cardDataCache[sym] = st; // cache para modal
+        renderMiniChart(sym);
+      }
+    }
+
+    // Modal
+    const backdrop = document.getElementById('modalBackdrop');
+    const btnClose = document.getElementById('modalClose');
+    btnClose.addEventListener('click', closeModal);
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) closeModal(); });
+
+    // Delegação de clique na grade -> abre modal
+    const gridEl = document.getElementById('grid');
+    gridEl.addEventListener('click', (e) => {
+      const card = e.target.closest('.card');
+      if (!card) return;
+      const sym = card.getAttribute('data-sym');
+      if (sym) openModal(sym);
+    });
+
+    async function openModal(sym) {
+      try {
+        const st = await fetchJSON(`/api/bot/${sym}/status`) || cardDataCache[sym];
+        if (!st) throw new Error('Status indisponível');
+
+        document.getElementById('modalTitle').textContent = `${sym} — Detalhes`;
+        const sig = st.signal || {};
+        const det = sig.details || {};
+        const params = st.params || {};
+        const weights = params.weights || { ml: 0.4, rule: 0.3, mtf: 0.3 };
+        const th = params.thresholds || { buy: 60, sell: 60 };
+        const rb_l = Number(det.rb_long || 0), rb_s = Number(det.rb_short || 0);
+        const tf_l = Number(det.tf_long || 0), tf_s = Number(det.tf_short || 0);
+        const mlp = Number(det.ml_p_up || 0.5);
+        const filterMult = Number(det.filter_mult ?? 1.0);
+        const wmlEff = Number(det.ml_weight_effective ?? weights.ml ?? 0);
+        const longScore = Math.max(0, Math.min(100, 100 * (weights.rule * rb_l + weights.mtf * tf_l + wmlEff * mlp) * filterMult));
+        const shortScore = Math.max(0, Math.min(100, 100 * (weights.rule * rb_s + weights.mtf * tf_s + wmlEff * (1 - mlp)) * filterMult));
+        const goodRegime = (det.regime_profile && (['PREDICTIVE', 'MTF_HEAVY'].includes(det.regime_profile) || (det.trend_score != null && (det.trend_score <= 0.35 || det.trend_score >= 0.65)))) ? 'Sim ✅' : 'Não ❌';
+        const ml = st.ml || {};
+        const auto = st.auto_params || {};
+        const ind = st.indicators || {};
+        const perf = st.performance || {};
+
+        const modalContent = document.getElementById('modalContent');
+
+        const regimeScore = Number(det.regime_global_score || 0.5);
+        const regimeScoreText = regimeScore <= 0.3 ? 'Bear Forte ⚠️' :
+                              regimeScore >= 0.7 ? 'Bull Forte 🚀' : 'Neutro ↔️';
+        const regimeScoreClass = regimeScore <= 0.3 ? 'loss' :
+                                regimeScore >= 0.7 ? 'gain' : 'muted';
+
+
+        modalContent.innerHTML = `
+          <div class="panel">
+            <h3>Força Long</h3>
+            <div class="bar"><div class="bar-fill-long" id="mLongFill" style="width:${longScore.toFixed(0)}%"></div></div>
+            <div class="row" style="justify-content:space-between;margin-top:6px">
+              <div class="muted">Score</div><div class="mono">${longScore.toFixed(0)}</div>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>Força Short</h3>
+            <div class="bar"><div class="bar-fill-short" id="mShortFill" style="width:${shortScore.toFixed(0)}%"></div></div>
+            <div class="row" style="justify-content:space-between;margin-top:6px">
+              <div class="muted">Score</div><div class="mono">${shortScore.toFixed(0)}</div>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>Confirmação MTF</h3>
+            <div class="list">
+              <div>Long: <b class="mono">${tf_l.toFixed(2)}</b></div>
+              <div>Short: <b class="mono">${tf_s.toFixed(2)}</b></div>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>ML</h3>
+            <div class="list">
+              <div>Status: <b>${ml.enabled ? (ml.trained ? 'Treinado' : 'Pronto p/ treinar') : 'Desativado'}</b></div>
+              <div>P(up): <b class="mono">${mlp.toFixed(2)}</b></div>
+              <div>Gate: <b class="mono">${Number(det.ml_weight_effective || 0).toFixed(2)}</b></div>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>Motivo</h3>
+            <div class="list">
+              <div>${Array.isArray(sig.reason) ? sig.reason.map(r => `<div>${r}</div>`).join('') : (sig.reason || '—')}</div>
+              <div class="muted" style="margin-top:6px;">
+                <div><b>Regime Global (BTC):</b> <span class="${regimeScoreClass}">${regimeScoreText}</span></div>
+                <b>Triggers:</b> ${det.triggers ? JSON.stringify(det.triggers) : '—'}
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>Estratégia Automática</h3>
+            <div class="list">
+              <div>Status: <span class="badge ${auto.enabled ? 'ok' : 'bad'}">${auto.enabled ? 'Ativa' : 'Inativa'}</span></div>
+              <div><b>Perfil Ativo:</b> <span class="badge">${auto.current_profile || '—'}</span></div>
+              <div style="margin-top: 8px;"><b>Motivo (Regime):</b> <span class="muted">${(auto.diagnostics || []).join('; ') || '—'}</span></div>
+              <div style="border-top: 1px solid var(--stroke); margin-top: 10px; padding-top: 10px;">
+                <b>Parâmetros Aplicados:</b>
+                <div>Pesos (ML/Rule/MTF): <b class="mono">${Number(weights.ml || 0).toFixed(2)}, ${Number(weights.rule || 0).toFixed(2)}, ${Number(weights.mtf || 0).toFixed(2)}</b></div>
+                <div>Thresholds (Buy/Sell): <b class="mono">${th.buy ?? '-'} / ${th.sell ?? '-'}</b></div>
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>Ações</h3>
+            <div class="row">
+              <button class="btn accent" id="btnTrainSel">Treinar ML (Sel)</button>
+              <button class="btn" id="btnTrainAllInModal">Treinar ML (Todos)</button>
+              <button class="btn" id="btnBacktestSel">Backtest (Sel)</button>
+              <select id="selObjective">
+                <option value="sharpe">Sharpe</option>
+                <option value="pnl">P&L</option>
+              </select>
+              <input id="inpTrials" type="number" min="5" max="50" value="10" style="width:70px" />
+              <button class="btn ok" id="btnOptimizeSel">Otimizar (Sel)</button>
+            </div>
+            <div id="modalActionLog" class="muted mono" style="margin-top:8px;"></div>
+          </div>
+          <div class="panel">
+            <h3>Indicadores</h3>
+            <div class="list">
+              <div>RSI: <b class="mono">${ind.rsi != null ? ind.rsi.toFixed(1) : '-'}</b></div>
+              <div>BB pos: <b class="mono">${ind.bb_position != null ? ind.bb_position.toFixed(2) : '-'}</b></div>
+              <div>EMA: <b class="mono">${ind.ema != null ? ind.ema.toFixed(2) : '-'}</b></div>
+              <div>MACD hist: <b class="mono">${ind.macd_histogram != null ? ind.macd_histogram.toFixed(5) : '-'}</b></div>
+              <div>Stoch K: <b class="mono">${ind.stoch_k != null ? ind.stoch_k.toFixed(1) : '-'}</b></div>
+              <div>Vol Ratio: <b class="mono">${ind.volume_ratio != null ? ind.volume_ratio.toFixed(2) : '-'}</b></div>
+              <div>ATR: <b class="mono">${ind.atr != null ? ind.atr.toFixed(4) : '-'}</b></div>
+              <div>EMA Slope: <b class="mono">${ind.ema_slope != null ? ind.ema_slope.toFixed(5) : '-'}</b></div>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>Performance</h3>
+            <div class="list">
+              <div>Total trades: <b class="mono">${perf.total_trades ?? 0}</b></div>
+              <div>Fechados: <b class="mono">${perf.closed_trades ?? 0}</b></div>
+              <div>Win rate: <b class="mono">${perf.win_rate ? perf.win_rate.toFixed(1) + '%' : '0%'}</b></div>
+              <div>Avg P&L: <b class="mono">${fmtMoney(perf.avg_pnl || 0)}</b></div>
+              <div>Best trade: <b class="mono">${fmtMoney(perf.best_trade || 0)}</b></div>
+              <div>Worst trade: <b class="mono">${fmtMoney(perf.worst_trade || 0)}</b></div>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>ML Quality & Meta</h3>
+            <div class="list">
+              <div>Features Estacionárias: <b class="mono">${ml.metrics && ml.metrics.non_stationary_removed ? ml.metrics.non_stationary_removed + ' removidas' : 'Todas mantidas'}</b></div>
+              <div>Qualidade: <b class="mono">${Number(ml.quality || 0).toFixed(2)}</b> <span class="muted">(0=ruim, 1=ótimo)</span></div>
+              <div>CV AUC: <b class="mono">${ml.metrics && ml.metrics.cv_auc ? Number(ml.metrics.cv_auc).toFixed(3) : '—'}</b></div>
+              <div>Holdout AUC: <b class="mono">${ml.metrics && ml.metrics.holdout_auc ? Number(ml.metrics.holdout_auc).toFixed(3) : '—'}</b></div>
+              <div>OOB AUC: <b class="mono">${ml.metrics && ml.metrics.oob_auc ? Number(ml.metrics.oob_auc).toFixed(3) : '—'}</b></div>
+              <div>Último treino: <b class="mono">${ml.last_trained ? new Date(ml.last_trained).toLocaleString() : '—'}</b></div>
+              <div>Top-K Features: <b class="mono">${ml.features_used ?? '—'}</b></div>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>Fluxo de Ordem</h3>
+            <div class="list">
+              <div>OrderBook Imbalance: <b class="mono">${det.orderbook_imbalance != null ? det.orderbook_imbalance.toFixed(3) : '-'}</b></div>
+              <div>Buy Vol Ratio: <b class="mono">${det.agg_buy_vol_ratio != null ? det.agg_buy_vol_ratio.toFixed(2) : '-'}</b></div>
+              <div>VPIN Toxicity: <b class="mono">${det.vpin_proxy != null ? det.vpin_proxy.toFixed(3) : '-'}</b></div>
+              <div>Local Vol (Z): <b class="mono">${det.local_vol_zscore != null ? det.local_vol_zscore.toFixed(2) : '-'}</b></div>
+              <div>Vol Ratio 5/20: <b class="mono">${det.vol_ratio_5_20 != null ? det.vol_ratio_5_20.toFixed(2) : '-'}</b></div>
+              <div>Volume Imbalance: <b class="mono">${det.volume_imbalance != null ? det.volume_imbalance.toFixed(2) : '-'}</b></div>
+              <div>VPIN Proxy: <b class="mono">${det.vpin_proxy != null ? det.vpin_proxy.toFixed(3) : '-'}</b></div>
+              <div>Spread Proxy: <b class="mono">${det.spread_proxy != null ? det.spread_proxy.toFixed(4) : '-'}</b></div>
+            </div>
+          </div>
+        `;
+
+        // Ações da modal
+        document.getElementById('btnTrainSel').onclick = async () => {
+          setModalLog('Treinando ML (Sel)...');
+          const j = await fetchJSON(`/api/bot/${sym}/train_ml`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ period: '7d', interval: '1m' })
+          });
+          setModalLog(j && j.success ? 'Treino OK' : ('Falha treino: ' + (j?.error || '—')));
+          await render(); // refresh KPIs
+        };
+
+        document.getElementById('btnTrainAllInModal').onclick = async () => {
+          setModalLog('Treinando ML (Todos)...');
+          const j = await fetchJSON(`/api/bot/ALL/train_ml`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ period: '7d', interval: '1m' })
+          });
+          setModalLog(j && j.success ? 'Treino (Todos) OK' : 'Falha ao treinar todos');
+        };
+
+        document.getElementById('btnBacktestSel').onclick = async () => {
+          setModalLog('Rodando Backtest (Sel)...');
+          const j = await fetchJSON(`/api/bot/${sym}/backtest`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ period: '7d', interval: '1m', walkforward: false })
+          });
+          if (j && j.success) {
+            setModalLog(`Backtest OK | Final: ${fmtMoney(j.final_capital)} | PnL: ${fmtMoney(j.total_pnl)} | Sharpe: ${Number(j.sharpe || 0).toFixed(2)} | MaxDD: ${(Number(j.max_drawdown || 0) * 100).toFixed(1)}%`);
+          } else {
+            setModalLog('Backtest falhou: ' + (j?.error || '—'));
+          }
+        };
+
+        document.getElementById('btnOptimizeSel').onclick = async () => {
+          const trials = Number(document.getElementById('inpTrials').value || 10);
+          const objective = document.getElementById('selObjective').value;
+          setModalLog(`Otimização (${objective}) em ${sym}...`);
+          const j = await fetchJSON(`/api/bot/${sym}/optimize`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ period: '7d', interval: '1m', trials, objective })
+          });
+          setModalLog(j && j.success ? `Otimização OK | candidatos: ${j.count}` : 'Otimização falhou: ' + (j?.error || '—'));
+          await render();
+        };
+
+        backdrop.style.display = 'flex';
+      } catch (e) {
+        console.error('openModal error', e);
+        alert('Falha ao abrir a modal: ' + (e.message || e));
+      }
+    }
+
+    function setModalLog(msg) {
+      const el = document.getElementById('modalActionLog');
+      if (el) el.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    }
+    function closeModal() {
+      document.getElementById('modalBackdrop').style.display = 'none';
+      document.getElementById('modalContent').innerHTML = '';
+    }
+
+    // Start
+    render();
+    setInterval(render, REFRESH_MS);
+  </script>
+</body>
+</html>
