@@ -1,4 +1,4 @@
-app = "nome-do-seu-app"  # Troque pelo nome do app que você criou no Fly.io
+app = "WIN-TRADING-BOT-FINAL-CORRIGIDO"  # Troque pelo nome do app que você criou no Fly.io
 
 [build]
   # Se você usa requirements.txt, Fly.io detecta automaticamente
