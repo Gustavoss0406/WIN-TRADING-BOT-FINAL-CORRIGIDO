@@ -147,9 +147,9 @@ PARAM_PROFILES = {
 # =====================================================================================
 def parse_iso(ts):
     try:
-        return datetime.fromisoformat(str(ts).replace('Z', ''))
+        return pd.to_datetime(str(ts), errors='coerce')
     except Exception:
-        return datetime.now()
+        return pd.Timestamp.now()
 
 def as_iso(dt):
     try:
