@@ -1,1 +1,19 @@
+app = "nome-do-seu-app"  # Troque pelo nome do app que você criou no Fly.io
 
+[build]
+  # Se você usa requirements.txt, Fly.io detecta automaticamente
+
+[env]
+  # Adicione variáveis de ambiente aqui se precisar
+
+[[services]]
+  internal_port = 3030
+  protocol = "tcp"
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
