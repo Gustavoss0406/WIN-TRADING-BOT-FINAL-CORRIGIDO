@@ -235,70 +235,92 @@ class FrozenEstimator:
 # Binance Provider
 # =====================================================================================
 class BinanceProvider:
-    def __init__(self, symbol='BTCUSDT', base_url='https://api.binance.com'):
+    def __init__(self, symbol='BTCUSDT', base_url=None):
         self.symbol = symbol
-        self.base_url = base_url
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": "Mozilla/5.0 (TradingBot)"})
+        self.symbol_map = {
+            'BTCUSDT': 'bitcoin',
+            'ETHUSDT': 'ethereum',
+            'BNBUSDT': 'binancecoin',
+            'SOLUSDT': 'solana',
+            'ADAUSDT': 'cardano',
+            'XRPUSDT': 'ripple',
+            'AVAXUSDT': 'avalanche-2',
+            'DOGEUSDT': 'dogecoin',
+            'MATICUSDT': 'matic-network',
+            'LINKUSDT': 'chainlink',
+        }
 
     def _fetch_klines(self, interval='1m', start_ms=None, end_ms=None, limit=1000):
-        url = f"{self.base_url}/api/v3/klines"
-        params = {'symbol': self.symbol, 'interval': interval, 'limit': limit}
-        if start_ms is not None:
-            params['startTime'] = int(start_ms)
-        if end_ms is not None:
-            params['endTime'] = int(end_ms)
-        r = self.session.get(url, params=params, timeout=10)
-        r.raise_for_status()
-        return r.json()
+            coin_id = self.symbol_map.get(self.symbol, 'bitcoin')
+            url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart"
+            interval_map = {'1m': 'minute', '5m': 'minute', '15m': 'minute', '1h': 'hour', '1d': 'day'}
+            cg_interval = interval_map.get(interval, 'minute')
+            days = 7 if cg_interval == 'minute' else 90
+            params = {
+                "vs_currency": "usd",
+                "days": days,
+                "interval": cg_interval
+            }
+            r = self.session.get(url, params=params, timeout=20)
+            r.raise_for_status()
+            data = r.json()
+            prices = data.get('prices', [])
+            klines = []
+            for ts, price in prices:
+                k = [
+                    ts,         # open time (ms)
+                    price,      # open
+                    price,      # high
+                    price,      # low
+                    price,      # close
+                    0, 0,       # ignore
+                    0.0,        # volume (not available)
+                ]
+                klines.append(k)
+            return klines
+
 
     def get_historical_df(self, days=7, interval='1m'):
-        try:
-            end_ms = int(time.time() * 1000)
-            start_ms = end_ms - int(days * 24 * 60 * 60 * 1000)
-            klines, cur = [], start_ms
-            step_ms = {'1m': 60_000, '3m': 180_000, '5m': 300_000, '15m': 900_000}.get(interval, 60_000)
-            safety = 0
-            while cur < end_ms and safety < 6000:
-                batch = self._fetch_klines(interval=interval, start_ms=cur, end_ms=end_ms, limit=1000)
-                if not batch:
-                    break
-                klines.extend(batch)
-                next_open = batch[-1][0] + step_ms
-                if next_open <= cur:
-                    next_open = cur + step_ms
-                cur = int(next_open)
-                safety += 1
-                time.sleep(0.02)
-            if not klines:
+            try:
+                klines = self._fetch_klines(interval=interval)
+                if not klines:
+                    return pd.DataFrame()
+                ot = [int(k[0]) for k in klines]
+                o = [float(k[1]) for k in klines]
+                h = [float(k[2]) for k in klines]
+                l = [float(k[3]) for k in klines]
+                c = [float(k[4]) for k in klines]
+                v = [float(k[7]) for k in klines]  # volume (sempre 0)
+                idx = pd.to_datetime(ot, unit='ms', utc=True).tz_convert(None)
+                df = pd.DataFrame({'open': o, 'high': h, 'low': l, 'close': c, 'volume': v}, index=idx)
+                df = df[~df.index.duplicated(keep='last')].sort_index()
+                return df
+            except Exception as e:
+                print(f"[{self.symbol}] Erro histórico CoinGecko: {e}")
                 return pd.DataFrame()
-            ot = [int(k[0]) for k in klines]
-            o = [float(k[1]) for k in klines]
-            h = [float(k[2]) for k in klines]
-            l = [float(k[3]) for k in klines]
-            c = [float(k[4]) for k in klines]
-            v = [float(k[7]) for k in klines]  # quote volume
-            idx = pd.to_datetime(ot, unit='ms', utc=True).tz_convert(None)
-            df = pd.DataFrame({'open': o, 'high': h, 'low': l, 'close': c, 'volume': v}, index=idx)
-            df = df[~df.index.duplicated(keep='last')].sort_index()
-            return df
-        except Exception as e:
-            logger.error(f"[{self.symbol}] Erro histórico Binance: {e}")
-            return pd.DataFrame()
+
 
     def get_latest_df(self, interval='1m'):
         try:
-            data = self._fetch_klines(interval=interval, limit=1)
-            if not data:
-                return pd.DataFrame()
-            k = data[-1]
-            idx = pd.to_datetime([int(k[0])], unit='ms', utc=True).tz_convert(None)
-            return pd.DataFrame({
-                'open': [float(k[1])], 'high': [float(k[2])], 'low': [float(k[3])],
-                'close': [float(k[4])], 'volume': [float(k[7])]
-            }, index=idx)
+            coin_id = self.symbol_map.get(self.symbol, 'bitcoin')
+            url = "https://api.coingecko.com/api/v3/simple/price"
+            params = {
+                "ids": coin_id,
+                "vs_currencies": "usd"
+            }
+            r = self.session.get(url, params=params, timeout=10)
+            r.raise_for_status()
+            price = r.json()[coin_id]['usd']
+            now = pd.Timestamp.utcnow()
+            df = pd.DataFrame({
+                'open': [price], 'high': [price], 'low': [price],
+                'close': [price], 'volume': [0.0]
+            }, index=[now])
+            return df
         except Exception as e:
-            logger.warning(f"[{self.symbol}] Erro último kline Binance: {e}")
+            print(f"[{self.symbol}] Erro último preço CoinGecko: {e}")
             return pd.DataFrame()
 
 # =====================================================================================
