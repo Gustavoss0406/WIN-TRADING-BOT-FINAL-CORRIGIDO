@@ -421,7 +421,7 @@ class OptimizedDataCollector:
                         self.last_fetch_ok = True
                         self._last_bar_time = idx
                         logger.info(f"[{self.provider.symbol}] {data['price']:.2f}")
-                time.sleep(10)
+                time.sleep(60)
             except Exception as e:
                 self.last_fetch_ok = False
                 logger.error(f"[{self.provider.symbol}] Loop coleta: {e}")
