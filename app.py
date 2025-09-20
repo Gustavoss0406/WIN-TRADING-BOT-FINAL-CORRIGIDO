@@ -2674,6 +2674,7 @@ class AutoParamScheduler:
         base['thresholds']['buy'] = prof['thresholds']['buy']
         base['thresholds']['sell'] = prof['thresholds']['sell']
         self.market_bot.signal_generator.set_params(base)
+        self.current_profile = profile_name  # <-- ADICIONE ESTA LINHA!
 
     def _eligible_to_switch(self):
         if self.last_switch is None:
