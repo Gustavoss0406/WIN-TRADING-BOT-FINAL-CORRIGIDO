@@ -394,38 +394,38 @@ class OptimizedDataCollector:
         logger.info(f"[{self.provider.symbol}] Coleta parada")
 
     def _collect_data_loop(self):
-    while self.is_running:
-        try:
-            df_latest = self.provider.get_latest_df(interval=self.base_interval)
-            if df_latest is not None and not df_latest.empty:
-                idx, row = df_latest.index[-1], df_latest.iloc[-1]
-
-                # --- CORREÇÃO: padroniza idx e self._last_bar_time para tz-naive ---
-                if getattr(idx, 'tzinfo', None) is not None:
-                    idx = idx.tz_convert(None)
-                if self._last_bar_time is not None and getattr(self._last_bar_time, 'tzinfo', None) is not None:
-                    self._last_bar_time = self._last_bar_time.tz_convert(None)
-
-                if self._last_bar_time is None or idx > self._last_bar_time:
-                    data = {
-                        'timestamp': idx.isoformat(),
-                        'price': float(row['close']),
-                        'open': float(row['open']), 'high': float(row['high']),
-                        'low': float(row['low']), 'close': float(row['close']),
-                        'volume': float(row['volume'])
-                    }
-                    self.current_data = data
-                    self.historical_data.append(data)
-                    self.chart_data.append(data)
-                    self.last_update = datetime.now()
-                    self.last_fetch_ok = True
-                    self._last_bar_time = idx
-                    logger.info(f"[{self.provider.symbol}] {data['price']:.2f}")
-            time.sleep(10)
-        except Exception as e:
-            self.last_fetch_ok = False
-            logger.error(f"[{self.provider.symbol}] Loop coleta: {e}")
-            time.sleep(30)
+        while self.is_running:
+            try:
+                df_latest = self.provider.get_latest_df(interval=self.base_interval)
+                if df_latest is not None and not df_latest.empty:
+                    idx, row = df_latest.index[-1], df_latest.iloc[-1]
+    
+                    # --- CORREÇÃO: padroniza idx e self._last_bar_time para tz-naive ---
+                    if getattr(idx, 'tzinfo', None) is not None:
+                        idx = idx.tz_convert(None)
+                    if self._last_bar_time is not None and getattr(self._last_bar_time, 'tzinfo', None) is not None:
+                        self._last_bar_time = self._last_bar_time.tz_convert(None)
+    
+                    if self._last_bar_time is None or idx > self._last_bar_time:
+                        data = {
+                            'timestamp': idx.isoformat(),
+                            'price': float(row['close']),
+                            'open': float(row['open']), 'high': float(row['high']),
+                            'low': float(row['low']), 'close': float(row['close']),
+                            'volume': float(row['volume'])
+                        }
+                        self.current_data = data
+                        self.historical_data.append(data)
+                        self.chart_data.append(data)
+                        self.last_update = datetime.now()
+                        self.last_fetch_ok = True
+                        self._last_bar_time = idx
+                        logger.info(f"[{self.provider.symbol}] {data['price']:.2f}")
+                time.sleep(10)
+            except Exception as e:
+                self.last_fetch_ok = False
+                logger.error(f"[{self.provider.symbol}] Loop coleta: {e}")
+                time.sleep(30)
             
     def get_current_data(self): return self.current_data
     def get_historical_data(self): return list(self.historical_data)
