@@ -235,41 +235,69 @@ class FrozenEstimator:
 # Binance Provider
 # =====================================================================================
 class BinanceProvider:
-    def __init__(self, symbol='BTCUSDT', base_url='https://api.binance.com'):
+    def __init__(self, symbol='BTCUSDT', base_url=None):
         self.symbol = symbol
-        self.base_url = base_url
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": "Mozilla/5.0 (TradingBot)"})
+        self.symbol_map = {
+            'BTCUSDT': 'BTC',
+            'ETHUSDT': 'ETH',
+            'BNBUSDT': 'BNB',
+            'SOLUSDT': 'SOL',
+            'ADAUSDT': 'ADA',
+            'XRPUSDT': 'XRP',
+            'AVAXUSDT': 'AVAX',
+            'DOGEUSDT': 'DOGE',
+            'MATICUSDT': 'MATIC',
+            'LINKUSDT': 'LINK',
+        }
+        self.base_url = "https://min-api.cryptocompare.com"
 
     def _fetch_klines(self, interval='1m', start_ms=None, end_ms=None, limit=1000):
-        url = f"{self.base_url}/api/v3/klines"
-        params = {'symbol': self.symbol, 'interval': interval, 'limit': limit}
-        if start_ms is not None:
-            params['startTime'] = int(start_ms)
-        if end_ms is not None:
-            params['endTime'] = int(end_ms)
-        r = self.session.get(url, params=params, timeout=10)
-        r.raise_for_status()
-        return r.json()
-
-    def get_historical_df(self, days=7, interval='1m'):
+        # CryptoCompare só permite candles de 1m, 5m, 15m, 30m, 1h, 4h, 1d
+        # O endpoint retorna até 2000 candles por request
+        symbol = self.symbol_map.get(self.symbol, 'BTC')
+        url = f"{self.base_url}/data/v2/histominute"
+        params = {
+            "fsym": symbol,
+            "tsym": "USD",
+            "limit": min(limit, 2000) - 1,  # CryptoCompare: limit é número de candles - 1
+        }
+        # Não suporta start_ms/end_ms, só "toTs" (timestamp final)
+        if end_ms:
+            params["toTs"] = int(end_ms / 1000)
         try:
-            end_ms = int(time.time() * 1000)
-            start_ms = end_ms - int(days * 24 * 60 * 60 * 1000)
-            klines, cur = [], start_ms
-            step_ms = {'1m': 60_000, '3m': 180_000, '5m': 300_000, '15m': 900_000}.get(interval, 60_000)
-            safety = 0
-            while cur < end_ms and safety < 6000:
-                batch = self._fetch_klines(interval=interval, start_ms=cur, end_ms=end_ms, limit=1000)
-                if not batch:
-                    break
-                klines.extend(batch)
-                next_open = batch[-1][0] + step_ms
-                if next_open <= cur:
-                    next_open = cur + step_ms
-                cur = int(next_open)
-                safety += 1
-                time.sleep(0.02)
+            r = self.session.get(url, params=params, timeout=20)
+            r.raise_for_status()
+            data = r.json()
+            if data.get("Response") != "Success":
+                print(f"[{self.symbol}] Erro CryptoCompare: {data.get('Message')}")
+                return []
+            candles = data["Data"]["Data"]
+            klines = []
+            for c in candles:
+                ts = c["time"] * 1000  # ms
+                k = [
+                    ts,                 # open time (ms)
+                    c["open"],          # open
+                    c["high"],          # high
+                    c["low"],           # low
+                    c["close"],         # close
+                    0, 0,               # ignore
+                    c.get("volumeto", 0.0),  # volume em USD
+                ]
+                klines.append(k)
+            time.sleep(1)  # Evita rate limit
+            return klines
+        except Exception as e:
+            print(f"[{self.symbol}] Erro histórico CryptoCompare: {e}")
+            return []
+
+    def get_historical_df(self, days=1, interval='1m'):
+        try:
+            # CryptoCompare: 1 dia = 1440 candles de 1m
+            limit = min(days * 1440, 2000)
+            klines = self._fetch_klines(interval=interval, limit=limit)
             if not klines:
                 return pd.DataFrame()
             ot = [int(k[0]) for k in klines]
@@ -277,29 +305,36 @@ class BinanceProvider:
             h = [float(k[2]) for k in klines]
             l = [float(k[3]) for k in klines]
             c = [float(k[4]) for k in klines]
-            v = [float(k[7]) for k in klines]  # quote volume
+            v = [float(k[7]) for k in klines]
             idx = pd.to_datetime(ot, unit='ms', utc=True).tz_convert(None)
             df = pd.DataFrame({'open': o, 'high': h, 'low': l, 'close': c, 'volume': v}, index=idx)
             df = df[~df.index.duplicated(keep='last')].sort_index()
             return df
         except Exception as e:
-            logger.error(f"[{self.symbol}] Erro histórico Binance: {e}")
+            print(f"[{self.symbol}] Erro histórico CryptoCompare: {e}")
             return pd.DataFrame()
 
     def get_latest_df(self, interval='1m'):
         try:
-            data = self._fetch_klines(interval=interval, limit=1)
-            if not data:
-                return pd.DataFrame()
-            k = data[-1]
-            idx = pd.to_datetime([int(k[0])], unit='ms', utc=True).tz_convert(None)
-            return pd.DataFrame({
-                'open': [float(k[1])], 'high': [float(k[2])], 'low': [float(k[3])],
-                'close': [float(k[4])], 'volume': [float(k[7])]
-            }, index=idx)
+            symbol = self.symbol_map.get(self.symbol, 'BTC')
+            url = f"{self.base_url}/data/price"
+            params = {
+                "fsym": symbol,
+                "tsyms": "USD"
+            }
+            r = self.session.get(url, params=params, timeout=10)
+            r.raise_for_status()
+            price = r.json()["USD"]
+            now = pd.Timestamp.utcnow()
+            df = pd.DataFrame({
+                'open': [price], 'high': [price], 'low': [price],
+                'close': [price], 'volume': [0.0]
+            }, index=[now])
+            return df
         except Exception as e:
-            logger.warning(f"[{self.symbol}] Erro último kline Binance: {e}")
+            print(f"[{self.symbol}] Erro último preço CryptoCompare: {e}")
             return pd.DataFrame()
+
 
 # =====================================================================================
 # Data Collector
