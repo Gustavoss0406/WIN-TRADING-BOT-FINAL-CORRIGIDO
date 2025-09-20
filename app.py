@@ -435,7 +435,7 @@ class OptimizedDataCollector:
         if not self.historical_data:
             return pd.DataFrame()
         df = pd.DataFrame(self.historical_data)
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        df['timestamp'] = pd.to_datetime(df['timestamp'], format='mixed', errors='coerce')
         df = df.set_index('timestamp').sort_index()
         return df[['open', 'high', 'low', 'close', 'volume']].astype(float)
 
