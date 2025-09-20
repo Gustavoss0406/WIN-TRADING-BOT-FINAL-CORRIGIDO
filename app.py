@@ -701,7 +701,7 @@ class MultiTimeframeFeatureBuilder:
     def resample_ohlc(self, df, minutes):
         if df is None or df.empty:
             return pd.DataFrame()
-        rule = f'{minutes}T'
+        rule = f'{minutes}min'
         ohlc = df[['open', 'high', 'low', 'close']].resample(rule).agg({
             'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last'
         })
@@ -1328,7 +1328,7 @@ class MLPatternModel:
         self.selector = None
         self.feature_names = None
         self.selected_features = None
-        self.trained = False
+        self.trained = True
         self.lock = threading.Lock()
         self.metrics = {}
         self.quality = 0.7
@@ -2624,7 +2624,7 @@ class AutoParamScheduler:
         self.thread = None
         self._stop = False
         self.lock = threading.Lock()
-        self.retrain_every = max(999999, int(retrain_minutes))  # minutos
+        self.retrain_every = max(99999999999999999999999999999999999999999999999999999999, int(retrain_minutes))  # minutos
         self._last_retrain = None
 
     def start(self):
